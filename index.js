@@ -1,8 +1,10 @@
-const { ApolloServer, gql } = require("apollo-server");
+const { ApolloServer, gql, PubSub } = require("apollo-server");
 const { GraphQLScalarType } = require("graphql");
 
 const lifts = require("./data/lifts.json");
 const trails = require("./data/trails.json");
+
+const pubsub = new PubSub();
 
 const typeDefs = gql`
   scalar DateTime
@@ -57,7 +59,13 @@ const typeDefs = gql`
     setLiftStatus(id: ID!, status: LiftStatus!): SetLiftStatusPayload!
     setTrailStatus(id: ID!, status: TrailStatus!): Trail!
   }
+
+  type Subscription {
+    liftStatusChange: Lift
+    trailStatusChange: Trail
+  }
 `;
+
 const resolvers = {
   Query: {
     allLifts: (parent, { status }) =>
@@ -77,18 +85,32 @@ const resolvers = {
         : trails.filter(trail => trail.status === status).length
   },
   Mutation: {
-    setLiftStatus: (parent, { id, status }) => {
+    setLiftStatus: (parent, { id, status }, { pubsub }) => {
       let updatedLift = lifts.find(lift => id === lift.id);
       updatedLift.status = status;
+      pubsub.publish("lift-status-change", { liftStatusChange: updatedLift });
       return {
         lift: updatedLift,
         changed: new Date()
       };
     },
-    setTrailStatus: (parent, { id, status }) => {
+    setTrailStatus: (parent, { id, status }, { pubsub }) => {
       let updatedTrail = trails.find(trail => id === trail.id);
       updatedTrail.status = status;
+      pubsub.publish("trail-status-change", {
+        trailStatusChange: updatedTrail
+      });
       return updatedTrail;
+    }
+  },
+  Subscription: {
+    liftStatusChange: {
+      subscribe: (parent, data, { pubsub }) =>
+        pubsub.asyncIterator("lift-status-change")
+    },
+    trailStatusChange: {
+      subscribe: (parent, data, { pubsub }) =>
+        pubsub.asyncIterator("trail-status-change")
     }
   },
   Lift: {
@@ -110,9 +132,10 @@ const resolvers = {
 
 const server = new ApolloServer({
   typeDefs,
-  resolvers
+  resolvers,
+  context: { pubsub }
 });
 
-server.listen({port: process.env.PORT || 4000}).then(({ url }) => {
+server.listen({ port: process.env.PORT || 4000 }).then(({ url }) => {
   console.log(`Server running at ${url}`);
 });
