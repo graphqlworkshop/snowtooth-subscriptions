@@ -1,4 +1,4 @@
-# Snowtooth Subscriptions 🏔
+# Snowtooth Subscriptions Lab 🏔
 
 In this activity, you'll add subscription support to Snowtooth Mountain, a real GraphQL API for a fake ski resort.
 
